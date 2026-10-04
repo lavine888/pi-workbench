@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "repository_name": "pi-workbench",
+  "publication_status": "pending-rights-review",
+  "upstream_baseline": {
+    "repository": "https://github.com/earendil-works/pi",
+    "tag": "v0.84.1",
+    "commit": "53fa77ccd8a279eb87e92294ef3687b03ff80112"
+  },
+  "files": [
+    {
+      "path": ".gitignore",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
+      "path": "README.md",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
+      "path": "docs/INSTALLATION.md",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
+      "path": "docs/PROJECT_STRUCTURE.md",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
+      "path": "docs/PROVENANCE.md",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
+      "path": "docs/PUBLIC_RELEASE.md",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
+      "path": "docs/THIRD_PARTY_NOTICES.md",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
+      "path": "docs/USAGE.md",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
+      "path": "public/agents/planner.md",
+      "source": ".pi/agents/planner.md",
+      "provenance": "upstream-derived-local-rights-pending",
+      "transformation": "remove model frontmatter only"
+    },
+    {
+      "path": "public/agents/reviewer.md",
+      "source": ".pi/agents/reviewer.md",
+      "provenance": "upstream-derived-local-rights-pending",
+      "transformation": "remove model frontmatter only"
+    },
+    {
+      "path": "public/agents/scout.md",
+      "source": ".pi/agents/scout.md",
+      "provenance": "upstream-derived-local-rights-pending",
+      "transformation": "remove model frontmatter only"
+    },
+    {
+      "path": "public/agents/worker.md",
+      "source": ".pi/agents/worker.md",
+      "provenance": "upstream-derived-local-rights-pending",
+      "transformation": "remove model frontmatter only"
+    },
+    {
+      "path": "public/examples/APPEND_SYSTEM.md",
+      "source": ".pi/APPEND_SYSTEM.md",
+      "provenance": "local-origin-rights-pending",
+      "transformation": "byte-identical copy"
+    },
+    {
+      "path": "public/examples/memory.synthetic.json",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-example",
+      "transformation": "none"
+    },
+    {
+      "path": "public/examples/settings.example.json",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-example",
+      "transformation": "none"
+    },
+    {
+      "path": "public/extensions/deepseek-harness.ts",
+      "source": ".pi/extensions/deepseek-harness.ts",
+      "provenance": "local-origin-rights-pending",
+      "transformation": "byte-identical copy"
+    },
+    {
+      "path": "public/extensions/subagent/agents.ts",
+      "source": ".pi/extensions/subagent/agents.ts",
+      "provenance": "upstream-MIT",
+      "transformation": "byte-identical copy"
+    },
+    {
+      "path": "public/extensions/subagent/index.ts",
+      "source": ".pi/extensions/subagent/index.ts",
+      "provenance": "upstream-derived-local-rights-pending",
+      "transformation": "byte-identical copy"
+    },
+    {
+      "path": "public/extensions/subagent/subagent-client.ts",
+      "source": ".pi/extensions/subagent/subagent-client.ts",
+      "provenance": "local-origin-rights-pending",
+      "transformation": "byte-identical copy"
+    },
+    {
+      "path": "public/extensions/subagent/subagent-server.ts",
+      "source": ".pi/extensions/subagent/subagent-server.ts",
+      "provenance": "local-origin-rights-pending",
+      "transformation": "byte-identical copy"
+    },
+    {
+      "path": "public/licenses/PI-MIT.txt",
+      "source": ".local-audit/upstream/LICENSE-v0.84.1",
+      "provenance": "upstream-MIT",
+      "transformation": "byte-identical copy"
+    },
+    {
+      "path": "public/manifest.json",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
+      "path": "public/prompts/debug.md",
+      "source": ".pi/prompts/debug.md",
+      "provenance": "local-origin-rights-pending",
+      "transformation": "add explicit project agent scope instruction"
+    },
+    {
+      "path": "public/prompts/document.md",
+      "source": ".pi/prompts/document.md",
+      "provenance": "local-origin-rights-pending",
+      "transformation": "add explicit project agent scope instruction"
+    },
+    {
+      "path": "public/prompts/implement-and-review.md",
+      "source": ".pi/prompts/implement-and-review.md",
+      "provenance": "upstream-derived-local-rights-pending",
+      "transformation": "add explicit project agent scope instruction"
+    },
+    {
+      "path": "public/prompts/implement.md",
+      "source": ".pi/prompts/implement.md",
+      "provenance": "upstream-derived-local-rights-pending",
+      "transformation": "add explicit project agent scope instruction"
+    },
+    {
+      "path": "public/prompts/refactor.md",
+      "source": ".pi/prompts/refactor.md",
+      "provenance": "local-origin-rights-pending",
+      "transformation": "add explicit project agent scope instruction"
+    },
+    {
+      "path": "public/prompts/scout-and-plan.md",
+      "source": ".pi/prompts/scout-and-plan.md",
+      "provenance": "upstream-derived-local-rights-pending",
+      "transformation": "add explicit project agent scope instruction"
+    },
+    {
+      "path": "public/prompts/test.md",
+      "source": ".pi/prompts/test.md",
+      "provenance": "local-origin-rights-pending",
+      "transformation": "add explicit project agent scope instruction"
+    },
+    {
+      "path": "scripts/prepare-public-release.py",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    }
+  ]
+}
