@@ -2,13 +2,41 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-Experimental extensions, persistent local memory, and multi-agent task delegation for [Pi](https://github.com/earendil-works/pi).
+**From an unfamiliar codebase to a file-backed implementation plan.** Experimental agent workflows for [Pi](https://github.com/earendil-works/pi).
 
-pi-workbench explores more structured coding workflows on top of Pi: guide an agent through **explore → edit → verify**, retain useful local execution patterns, and delegate tasks to specialized agents through single, parallel, or chained calls.
+Start with **`/scout-and-plan`**: scout gathers code context, then planner proposes concrete changes with source references. The workspace also explores implementation/review workflows, execution guidance, and persistent local memory.
 
 > **Status: Experimental / `pending-rights-review`.** Local additions and some upstream-derived modifications still need provenance and license confirmation. See [Provenance & License](#provenance--license).
 
-[Quick Start](#quick-start) · [Agents](#built-in-agents) · [Workflows](#prompt-workflows) · [Usage](#usage) · [Limitations](#known-limitations)
+[Try the Sample](#try-the-planning-workflow) · [Agents](#built-in-agents) · [Workflows](#prompt-workflows) · [Usage](#usage) · [Limitations](#known-limitations)
+
+## Try the Planning Workflow
+
+**Demo status: offline preparation complete; real model execution and terminal recording are pending.** No GIF or measured agent result is available yet. Use the [synthetic reading-list CLI](public/examples/scout-plan-project/README.md) to plan a `--tag` filter without implementing it. The [human-written acceptance rubric](public/examples/scout-plan-project/EXPECTED_PLAN.md) shows what to check; it is not model output and is kept out of the generated agent workspace.
+
+With Node.js and Pi 0.84.2 already installed, run from this repository's root:
+
+```console
+node scripts/create-demo.mjs
+node scripts/check-demo.mjs
+```
+
+This creates a new ignored `.local-audit/scout-plan-demo/` using an explicit file list, then checks the sample and copy integrity without model calls. It refuses to overwrite an existing directory. No npm installation is needed for the sample.
+
+After configuring and checking the parent and child models, start Pi in that directory:
+
+```console
+cd .local-audit/scout-plan-demo
+pi --no-extensions -e ./.pi/extensions/subagent/index.ts
+```
+
+Then enter:
+
+```text
+/scout-and-plan Plan a case-insensitive --tag filter for this reading-list CLI; combine it with --status, reject blank or missing tags, and cite source files and lines. Do not modify files. Read TASK.md for requirements.
+```
+
+The intended result is a scout → planner handoff and an actionable plan. This model run has not been performed. See the [demo guide](docs/DEMO.md) for the expected output criteria, model configuration caveats, integrity check after a run, and 30–45 second recording outline. Setup time and model execution time have not been measured.
 
 ## Overview
 
@@ -20,6 +48,17 @@ It brings together two experiments:
 - **Task delegation:** separate reconnaissance, planning, implementation, and review into roles with their own task context.
 
 The repository contains extensions, agent definitions, and prompt templates. Real model-driven workflows have not been validated end to end.
+
+## What This Adds to Pi's Example
+
+Pi already provides a [subagent example](https://github.com/earendil-works/pi/tree/v0.84.1/packages/coding-agent/examples/extensions/subagent). Single, parallel, and chain delegation are upstream capabilities, not original inventions of this project.
+
+| Area | Boundary |
+| --- | --- |
+| Agent discovery, delegation modes, role prompts | Includes upstream material and local adaptations; see [Provenance](docs/PROVENANCE.md) |
+| JSON-RPC scheduling, task display, additional workflow templates | Local changes included here; provenance/rights and real execution still need confirmation |
+| Execution harness and local memory | Separate experiments; not loaded by the planning sample and not backed by performance claims |
+| Synthetic sample, preparation scripts, plan rubric | Reproducible offline preparation added here; does not establish workflow success |
 
 ## Features
 
@@ -188,7 +227,7 @@ Each task or chain step can supply `cwd`. Project-agent confirmation is only sho
 
 ## Demo
 
-> **TODO — author material:** add a terminal GIF showing `/scout-and-plan` → scout running → planner running → final implementation plan. Include the SubAgent Tasks TUI and final summary. No capture is included yet.
+The featured scenario is `/scout-and-plan` on the [synthetic sample](public/examples/scout-plan-project/README.md). [Reproduction and recording instructions](docs/DEMO.md) are available. **Real execution, output capture, and a terminal GIF remain pending.** The acceptance rubric is manually authored, and sample tests are separate from Pi integration checks. `/implement-and-review` is a follow-up after this scenario has been validated.
 
 ## Local Data & Safety
 
@@ -228,10 +267,12 @@ public/
     subagent/                     # Tool, agent discovery, client, server
   agents/                         # Four role definitions
   prompts/                        # Seven model-driven workflows
-  examples/                       # Empty settings, synthetic memory, optional preferences
+  examples/                       # Synthetic CLI, empty settings/memory, optional preferences
   licenses/PI-MIT.txt              # Confirmed upstream Pi license
   manifest.json                   # Explicit public candidate file list
 scripts/
+  create-demo.mjs                  # Explicit offline sample preparation
+  check-demo.mjs                   # Sample baseline and copy integrity checks
   prepare-public-release.py        # Offline check and local candidate export
 .gitignore                        # Exact public allowlist
 ```
@@ -259,6 +300,7 @@ Detailed notes are currently written in Chinese.
 
 | Document | Contents |
 | --- | --- |
+| [Demo Guide](docs/DEMO.md) | Featured planning scenario, synthetic fixture, acceptance rubric, and recording checklist |
 | [Installation](docs/INSTALLATION.md) | Baseline, Windows setup, configuration, disabling and uninstalling |
 | [Usage](docs/USAGE.md) | Tool arguments, harness behavior, runtime data, and service-path boundaries |
 | [Project Structure](docs/PROJECT_STRUCTURE.md) | Public candidate layout and original workspace separation |

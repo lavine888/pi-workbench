@@ -6,8 +6,10 @@
 
 ```text
 README.md
+README.zh-CN.md
 .gitignore
 docs/
+  DEMO.md
   PROJECT_STRUCTURE.md
   PROVENANCE.md
   INSTALLATION.md
@@ -15,6 +17,8 @@ docs/
   THIRD_PARTY_NOTICES.md
   PUBLIC_RELEASE.md
 scripts/
+  create-demo.mjs
+  check-demo.mjs
   prepare-public-release.py
 public/
   manifest.json
@@ -28,6 +32,7 @@ public/
   agents/                       # 四个通用角色的候选副本
   prompts/                      # 七个提示模板的候选副本
   examples/
+    scout-plan-project/         # 合成 CLI、规划任务与人工验收标准
     settings.example.json
     memory.synthetic.json
     APPEND_SYSTEM.md

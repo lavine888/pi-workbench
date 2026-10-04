@@ -1,0 +1,6 @@
+[
+  { "id": "book-001", "title": "The Paper Observatory", "status": "unread", "tags": ["science", "fiction"] },
+  { "id": "book-002", "title": "A Map of Small Machines", "status": "reading", "tags": ["engineering"] },
+  { "id": "book-003", "title": "Gardens on the Moon", "status": "finished", "tags": ["fiction"] },
+  { "id": "book-004", "title": "The Quiet Algorithm", "status": "reading", "tags": ["engineering", "fiction"] }
+]

@@ -29,6 +29,8 @@ pi --version
 
 ## 在独立项目中试用
 
+首次试用 `/scout-and-plan` 可先使用[合成示例与离线准备入口](DEMO.md)。它只复制该场景需要的子代理扩展、两个角色和一个提示，不加载 harness，也不调用模型。下面保留完整扩展工作区的手动安装方式。
+
 在仓库根目录运行以下 PowerShell 命令。`sandbox-project` 应为新建目录，不能指向现有部署：
 
 ```powershell

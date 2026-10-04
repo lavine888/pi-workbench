@@ -2,13 +2,41 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-面向 [Pi](https://github.com/earendil-works/pi) 的实验性扩展、本地持久记忆与多代理任务委派。
+**从陌生代码库，到有文件依据的实施计划。** 面向 [Pi](https://github.com/earendil-works/pi) 的实验性代理工作流。
 
-pi-workbench 在 Pi 之上探索更有结构的编码工作流：引导代理经历 **探索 → 修改 → 验证**，保存可复用的本地执行模式，并通过单任务、并行或串联调用，把工作交给不同角色的代理。
+先从 **`/scout-and-plan`** 开始：scout 收集代码上下文，planner 再提出带源码引用的具体改动计划。工作区还探索实施与审查工作流、执行引导及本地持久记忆。
 
 > **状态：实验性 / `pending-rights-review`。** 本地新增内容和部分上游改编内容仍需确认来源与授权。详见[来源与许可证](#来源与许可证)。
 
-[快速开始](#快速开始) · [内置代理](#内置代理) · [提示工作流](#提示工作流) · [使用方法](#使用方法) · [已知限制](#已知限制)
+[试用示例](#快速试用规划工作流) · [内置代理](#内置代理) · [提示工作流](#提示工作流) · [使用方法](#使用方法) · [已知限制](#已知限制)
+
+## 快速试用规划工作流
+
+**演示状态：离线准备完成；真实模型执行与终端录制待完成。** 目前没有 GIF 或实测代理结果。使用[合成阅读清单 CLI](public/examples/scout-plan-project/README.md)，规划 `--tag` 筛选功能，不实施修改。[人工验收标准](public/examples/scout-plan-project/EXPECTED_PLAN.md)说明应检查什么；它不是模型输出，也不会复制到生成的代理工作目录。
+
+已经安装 Node.js 和 Pi 0.84.2 时，在仓库根目录执行：
+
+```console
+node scripts/create-demo.mjs
+node scripts/check-demo.mjs
+```
+
+这会按显式文件清单创建被忽略的新目录 `.local-audit/scout-plan-demo/`，再检查示例及副本完整性，不请求模型。已有目录不会被覆盖。示例无需安装 npm 依赖。
+
+配置并核对父代理与子代理模型后，在该目录启动 Pi：
+
+```console
+cd .local-audit/scout-plan-demo
+pi --no-extensions -e ./.pi/extensions/subagent/index.ts
+```
+
+然后输入：
+
+```text
+/scout-and-plan Plan a case-insensitive --tag filter for this reading-list CLI; combine it with --status, reject blank or missing tags, and cite source files and lines. Do not modify files. Read TASK.md for requirements.
+```
+
+预期得到 scout → planner 的交接和可执行的计划；这次模型运行尚未执行。[演示指南](docs/DEMO.md)提供预期输出标准、模型配置注意事项、运行后的完整性检查及 30～45 秒录制安排。准备耗时和模型执行耗时均未实测。
 
 ## 项目概览
 
@@ -20,6 +48,17 @@ pi-workbench 在 Pi 之上探索更有结构的编码工作流：引导代理经
 - **任务委派：** 将代码侦察、规划、实施和审查分配给拥有各自任务上下文的代理角色。
 
 仓库提供扩展、代理定义和提示模板。真实模型驱动的工作流尚未完成端到端验证。
+
+## 相比 Pi 官方示例增加了什么
+
+Pi 已有[子代理示例](https://github.com/earendil-works/pi/tree/v0.84.1/packages/coding-agent/examples/extensions/subagent)。单任务、并行和串联委派是上游能力，不作为本项目的原创能力宣传。
+
+| 内容 | 边界 |
+| --- | --- |
+| 代理发现、委派模式和角色提示 | 包含上游内容及本地改编；见[来源与归属](docs/PROVENANCE.md) |
+| JSON-RPC 调度、任务展示和新增工作流模板 | 仓库包含的本地改造；来源／授权和真实运行仍需确认 |
+| 执行 harness 与本地记忆 | 独立实验；规划示例不加载，不宣传未经验证的性能提升 |
+| 合成示例、准备脚本和计划验收标准 | 本次新增的可复现离线准备材料，不代表工作流运行成功 |
 
 ## 功能
 
@@ -188,7 +227,7 @@ Pi 会发现顶层扩展和子代理目录的 `index.ts`。空配置示例不会
 
 ## 演示
 
-> **TODO — 待补充素材：** 添加终端 GIF，展示 `/scout-and-plan` → scout 运行 → planner 运行 → 最终实施计划，并包含 SubAgent Tasks 终端界面和最终摘要。目前尚未提供录制素材。
+主打场景是在[合成示例](public/examples/scout-plan-project/README.md)上使用 `/scout-and-plan`。[复现与录制说明](docs/DEMO.md)已提供。**真实执行、输出采集和终端 GIF 仍待完成。** 验收标准为人工编写，示例测试与 Pi 集成检查分别记录。该场景验证后，再展示 `/implement-and-review`。
 
 ## 本地数据与安全
 
@@ -228,10 +267,12 @@ public/
     subagent/                     # 工具、代理发现、客户端与服务端
   agents/                         # 四种角色定义
   prompts/                        # 七种模型驱动的工作流
-  examples/                       # 空配置、合成记忆与可选偏好
+  examples/                       # 合成 CLI、空配置／记忆与可选偏好
   licenses/PI-MIT.txt              # 已确认的上游 Pi 许可证
   manifest.json                   # 明确的公开候选文件清单
 scripts/
+  create-demo.mjs                  # 按显式清单准备离线示例
+  check-demo.mjs                   # 示例基线与副本完整性检查
   prepare-public-release.py        # 离线检查与本地候选副本导出
 .gitignore                        # 精确的公开文件白名单
 ```
@@ -259,6 +300,7 @@ python scripts/prepare-public-release.py --output .local-audit/release-candidate
 
 | 文档 | 内容 |
 | --- | --- |
+| [演示指南](docs/DEMO.md) | 主打规划场景、合成示例、验收标准和录制清单 |
 | [安装说明](docs/INSTALLATION.md) | 环境基线、Windows 安装、配置、禁用和卸载 |
 | [使用说明](docs/USAGE.md) | 工具参数、harness 行为、运行数据和服务路径边界 |
 | [目录结构](docs/PROJECT_STRUCTURE.md) | 公开候选布局与原始工作区隔离 |

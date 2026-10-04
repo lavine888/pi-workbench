@@ -27,6 +27,12 @@
       "transformation": "Simplified Chinese translation; commands and technical boundaries preserved"
     },
     {
+      "path": "docs/DEMO.md",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
       "path": "docs/INSTALLATION.md",
       "source": "created-for-this-task",
       "provenance": "release-preparation",
@@ -94,6 +100,54 @@
     },
     {
       "path": "public/examples/memory.synthetic.json",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-example",
+      "transformation": "none"
+    },
+    {
+      "path": "public/examples/scout-plan-project/EXPECTED_PLAN.md",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-example",
+      "transformation": "none"
+    },
+    {
+      "path": "public/examples/scout-plan-project/README.md",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-example",
+      "transformation": "none"
+    },
+    {
+      "path": "public/examples/scout-plan-project/TASK.md",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-example",
+      "transformation": "none"
+    },
+    {
+      "path": "public/examples/scout-plan-project/data/books.json",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-example",
+      "transformation": "none"
+    },
+    {
+      "path": "public/examples/scout-plan-project/package.json",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-example",
+      "transformation": "none"
+    },
+    {
+      "path": "public/examples/scout-plan-project/src/catalog.mjs",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-example",
+      "transformation": "none"
+    },
+    {
+      "path": "public/examples/scout-plan-project/src/cli.mjs",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-example",
+      "transformation": "none"
+    },
+    {
+      "path": "public/examples/scout-plan-project/test/catalog.test.mjs",
       "source": "created-for-this-task",
       "provenance": "synthetic-example",
       "transformation": "none"
@@ -187,6 +241,18 @@
       "source": ".pi/prompts/test.md",
       "provenance": "local-origin-rights-pending",
       "transformation": "add explicit project agent scope instruction"
+    },
+    {
+      "path": "scripts/check-demo.mjs",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
+      "path": "scripts/create-demo.mjs",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
     },
     {
       "path": "scripts/prepare-public-release.py",
