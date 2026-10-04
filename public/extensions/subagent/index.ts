@@ -12,8 +12,6 @@
  * Uses JSON mode to capture structured output from subagents.
  */
 
-import { spawn } from "node:child_process";
-import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
@@ -24,13 +22,13 @@ import {
 	type ExtensionAPI,
 	getAgentDir,
 	getMarkdownTheme,
-	withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.ts";
 import {
 	getServerManager,
+	getActiveServerManager,
 	runSingleAgentFallback,
 	getFinalOutput,
 	isFailedResult,
@@ -41,7 +39,6 @@ const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
 const PER_TASK_OUTPUT_CAP = 50 * 1024;
-const SUBAGENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes per agent
 
 // ── Error classification ───────────────────────────────────────────
 
@@ -311,19 +308,6 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
 	return results;
 }
 
-// writePromptToTempFile 已迁移到 subagent-client.ts
-async function _writePromptToTempFile(agentName: string, prompt: string): Promise<{ dir: string; filePath: string }> {
-	const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "pi-subagent-"));
-	const safeName = agentName.replace(/[^\w.-]+/g, "_");
-	const filePath = path.join(tmpDir, `prompt-${safeName}.md`);
-	await withFileMutationQueue(filePath, async () => {
-		await fs.promises.writeFile(filePath, prompt, { encoding: "utf-8", mode: 0o600 });
-	});
-	return { dir: tmpDir, filePath };
-}
-
-// getPiInvocation 已迁移到 subagent-client.ts (runSingleAgentFallback)
-
 type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
 
 async function runSingleAgent(
@@ -353,217 +337,49 @@ async function runSingleAgent(
 		};
 	}
 
-	// 尝试使用 subagent server (JSON-RPC over stdio)
-	try {
-		const server = getServerManager();
-		await server.ensureRunning();
-
-		const currentResult: SingleResult = {
-			agent: agentName,
-			agentSource: agent.source,
-			task,
-			exitCode: 0,
-			messages: [],
-			stderr: "",
-			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-			model: agent.model,
-			step,
-		};
-
-		const emitUpdate = () => {
-			if (onUpdate) {
-				onUpdate({
-					content: [{ type: "text", text: getFinalOutput(currentResult.messages) || "(running...)" }],
-					details: makeDetails([currentResult]),
-				});
-			}
-		};
-
-		const result = await server.executeTask(
-			agentName,
-			task,
-			agent.systemPrompt,
-			cwd ?? defaultCwd,
-			(msg) => {
-				currentResult.messages.push(msg);
-				if (msg.role === "assistant") {
-					currentResult.usage.turns++;
-					const usage = (msg as any).usage;
-					if (usage) {
-						currentResult.usage.input += usage.input || 0;
-						currentResult.usage.output += usage.output || 0;
-						currentResult.usage.cacheRead += usage.cacheRead || 0;
-						currentResult.usage.cacheWrite += usage.cacheWrite || 0;
-						currentResult.usage.cost += usage.cost?.total || 0;
-						currentResult.usage.contextTokens = usage.totalTokens || 0;
-					}
-					if (!currentResult.model && (msg as any).model) currentResult.model = (msg as any).model;
-					if ((msg as any).stopReason) currentResult.stopReason = (msg as any).stopReason;
-					if ((msg as any).errorMessage) currentResult.errorMessage = (msg as any).errorMessage;
-				}
-				emitUpdate();
-			},
-		);
-
-		currentResult.messages = result.messages || [];
-		currentResult.usage = result.usage || currentResult.usage;
-		currentResult.model = result.model || currentResult.model;
-		currentResult.stopReason = result.stopReason;
-		currentResult.errorMessage = result.errorMessage;
-		currentResult.stderr = result.stderr || "";
-		currentResult.exitCode = result.exitCode ?? 0;
-
-		if (currentResult.exitCode === 0 && currentResult.messages.length === 0) {
-			throw new Error("Server returned empty result, falling back to direct spawn");
-		}
-
-		return currentResult;
-	} catch (err) {
-		// 服务器不可用，回退到老式 spawn 方法
-		console.error(`[subagent] Server unavailable, falling back to direct spawn: ${(err as Error).message}`);
-		return runSingleAgentFallback(
-			defaultCwd,
-			agent,
-			task,
-			cwd,
-			step,
-			signal,
-			onUpdate ? (result) => {
-				onUpdate({
-					content: [{ type: "text", text: getFinalOutput(result.messages) || "(running...)" }],
-					details: makeDetails([result]),
-				});
-			} : undefined,
-		);
-	}
-
-	try {
-		if (agent.systemPrompt.trim()) {
-			const tmp = await writePromptToTempFile(agent.name, agent.systemPrompt);
-			tmpPromptDir = tmp.dir;
-			tmpPromptPath = tmp.filePath;
-			args.push("--append-system-prompt", tmpPromptPath);
-		}
-
-		args.push(`Task: ${task}`);
-		let wasAborted = false;
-
-		const exitCode = await new Promise<number>((resolve) => {
-			const invocation = getPiInvocation(args);
-			const isWindows = process.platform === "win32";
-			const proc = spawn(
-				isWindows ? "node" : invocation.command,
-				isWindows
-					? [process.argv[1] || invocation.command, ...args]
-					: invocation.args,
-				{
-					cwd: cwd ?? defaultCwd,
-					shell: false,
-					stdio: ["ignore", "pipe", "pipe"],
-				}
-			);
-
-			// Timeout protection
-			const timeout = setTimeout(() => {
-				wasAborted = true;
-				proc.kill("SIGTERM");
-				setTimeout(() => { if (!proc.killed) proc.kill("SIGKILL"); }, 2000);
-			}, SUBAGENT_TIMEOUT_MS);
-
-			const cleanup = () => clearTimeout(timeout);
-			let buffer = "";
-
-			const processLine = (line: string) => {
-				if (!line.trim()) return;
-				let event: any;
-				try {
-					event = JSON.parse(line);
-				} catch {
-					return;
-				}
-
-				if (event.type === "message_end" && event.message) {
-					const msg = event.message as Message;
-					currentResult.messages.push(msg);
-
-					if (msg.role === "assistant") {
-						currentResult.usage.turns++;
-						const usage = msg.usage;
-						if (usage) {
-							currentResult.usage.input += usage.input || 0;
-							currentResult.usage.output += usage.output || 0;
-							currentResult.usage.cacheRead += usage.cacheRead || 0;
-							currentResult.usage.cacheWrite += usage.cacheWrite || 0;
-							currentResult.usage.cost += usage.cost?.total || 0;
-							currentResult.usage.contextTokens = usage.totalTokens || 0;
-						}
-						if (!currentResult.model && msg.model) currentResult.model = msg.model;
-						if (msg.stopReason) currentResult.stopReason = msg.stopReason;
-						if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
-					}
-					emitUpdate();
-				}
-
-				if (event.type === "tool_result_end" && event.message) {
-					currentResult.messages.push(event.message as Message);
-					emitUpdate();
-				}
-			};
-
-			proc.stdout.on("data", (data) => {
-				buffer += data.toString();
-				const lines = buffer.split("\n");
-				buffer = lines.pop() || "";
-				for (const line of lines) processLine(line);
-			});
-
-			proc.stderr.on("data", (data) => {
-				currentResult.stderr += data.toString();
-			});
-
-			proc.on("close", (code) => {
-				if (buffer.trim()) processLine(buffer);
-				clearTimeout(timeout);
-				resolve(code ?? 0);
-			});
-
-			proc.on("error", () => {
-				clearTimeout(timeout);
-				resolve(1);
-			});
-
-			if (signal) {
-				const killProc = () => {
-					wasAborted = true;
-					proc.kill("SIGTERM");
-					setTimeout(() => {
-						if (!proc.killed) proc.kill("SIGKILL");
-					}, 5000);
-				};
-				if (signal.aborted) killProc();
-				else signal.addEventListener("abort", killProc, { once: true });
-			}
-		});
-
-		currentResult.exitCode = exitCode;
-		if (wasAborted) throw new Error("Subagent was aborted");
-		return currentResult;
-	} finally {
-		// Cleanup: temp files
-		if (tmpPromptPath)
-			try {
-				fs.unlinkSync(tmpPromptPath);
-			} catch {
-				/* ignore */
-			}
-		if (tmpPromptDir)
-			try {
-				fs.rmdirSync(tmpPromptDir);
-			} catch {
-				/* ignore */
-			}
-	}
+  const server = getServerManager();
+  if (signal?.aborted) throw new Error("Subagent was aborted");
+  // Only a startup failure may use fallback. Once submitted, the execution
+  // outcome can be unknown; automatically replaying it could duplicate edits.
+  try { await server.ensureRunning(); }
+  catch (error) {
+    if (signal?.aborted) throw new Error("Subagent was aborted");
+    console.error("[subagent] Service startup failed; using direct process launch.");
+    return runSingleAgentFallback(defaultCwd, agent, task, cwd, step, signal,
+      onUpdate ? (result) => onUpdate({
+        content: [{ type: "text", text: getFinalOutput(result.messages) || "(running...)" }],
+        details: makeDetails([result]),
+      }) : undefined);
+  }
+  const currentResult: SingleResult = {
+    agent: agentName, agentSource: agent.source, task, exitCode: -1, messages: [], stderr: "",
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 }, model: agent.model, step,
+  };
+  const result = await server.executeTask(agentName, task, agent.systemPrompt, cwd ?? defaultCwd, (message) => {
+    currentResult.messages.push(message);
+    if (message.role === "assistant") {
+      currentResult.usage.turns++;
+      const usage = (message as any).usage;
+      if (usage) {
+        for (const field of ["input", "output", "cacheRead", "cacheWrite"] as const) currentResult.usage[field] += usage[field] || 0;
+        currentResult.usage.cost += usage.cost?.total || 0;
+        currentResult.usage.contextTokens = usage.totalTokens || 0;
+      }
+      currentResult.model = (message as any).model || currentResult.model;
+      currentResult.stopReason = (message as any).stopReason;
+      currentResult.errorMessage = (message as any).errorMessage;
+    }
+    onUpdate?.({ content: [{ type: "text", text: getFinalOutput(currentResult.messages) || "(running...)" }], details: makeDetails([currentResult]) });
+  }, { model: agent.model, tools: agent.tools, signal });
+  Object.assign(currentResult, result);
+  if (result.exitCode === 0 && result.messages.length === 0) {
+    currentResult.exitCode = 1;
+    currentResult.stopReason = "error";
+    currentResult.errorMessage = "Subagent returned no messages; task was not replayed";
+  }
+  return currentResult;
 }
+
 
 const TaskItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
@@ -594,31 +410,10 @@ const SubagentParams = Type.Object({
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
 });
 
-// ── 进程清理：主进程退出时关闭 subagent server ────────────────
-process.on("exit", () => {
-	try {
-		const server = getServerManager();
-		server.shutdown().catch(() => {});
-	} catch { /* ignore */ }
-});
-
-process.on("SIGTERM", () => {
-	try {
-		const server = getServerManager();
-		server.shutdown().catch(() => {});
-	} catch { /* ignore */ }
-	process.exit(0);
-});
-
-process.on("SIGINT", () => {
-	try {
-		const server = getServerManager();
-		server.shutdown().catch(() => {});
-	} catch { /* ignore */ }
-	process.exit(0);
-});
+process.once("exit", () => getActiveServerManager()?.disconnect());
 
 export default function (pi: ExtensionAPI) {
+	pi.on("session_shutdown", async () => { await getActiveServerManager()?.shutdown(); });
 	pi.registerTool({
 		name: "subagent",
 		label: "Subagent",
@@ -646,7 +441,8 @@ export default function (pi: ExtensionAPI) {
 
 			const agentScope: AgentScope = params.agentScope ?? "user";
 			const discovery = discoverAgents(ctx.cwd, agentScope);
-			const agents = discovery.agents;
+			const parentModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
+			const agents = discovery.agents.map((agent) => ({ ...agent, model: agent.model ?? parentModel }));
 			const confirmProjectAgents = params.confirmProjectAgents ?? true;
 
 			const hasChain = (params.chain?.length ?? 0) > 0;

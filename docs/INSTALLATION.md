@@ -10,10 +10,10 @@
 | npm | 11.12.1 | 实际版本命令 |
 | Pi coding-agent / AI / agent-core / TUI | 0.84.2 | 已安装各包的 package.json |
 | TypeBox | 1.3.7 | 已安装 Pi 依赖元数据及源码 import |
-| tsx | 未找到可解析的全局或 Pi 内置安装 | 客户端会调用 `npx tsx`，因此服务启动可能尝试下载，版本尚未锁定 |
+| 子代理服务运行器 | Node.js 24.15.0 已测试 | 使用 Node 原生类型擦除与内置模块，不依赖 tsx，不通过 npx 下载运行器 |
 | Python | 3.10 或更新 | 发布清单脚本只使用标准库 |
 
-没有验证其他 Pi 版本、Linux、macOS 或 Bun。没有建立根 package/lockfile；不要在工作区根运行 `npm install` 或 `npm ci`。已安装 Pi 的扩展加载器负责解析源码使用的 Pi 模块和 TypeBox，这不保证源码可以由独立的 `node` 或 `npx tsx` 直接加载。
+没有验证其他 Pi 版本、Linux、macOS 或 Bun。没有建立根 package/lockfile；不要在工作区根运行 `npm install` 或 `npm ci`。已安装 Pi 的扩展加载器负责解析工具入口使用的 Pi 模块和 TypeBox；独立服务及共享进程模块仅使用 Node 内置模块，使用已测试的 Node 基线启动。
 
 ## 准备 Pi
 
@@ -47,7 +47,9 @@ Pop-Location
 
 Pi 在项目 `.pi/extensions/` 中自动发现顶层扩展与子目录 `index.ts`；空 settings 示例不覆盖模型或认证配置。没有复制本地记忆或全局认证。`APPEND_SYSTEM.md` 是可选的项目偏好，默认安装过程不复制它。
 
-模型和认证遵循所选 Pi/provider 的配置。不得把真实密钥写入本仓库；公开角色不锁定 provider/model，但当前服务分支没有完整传递角色的 model/tools 选项。首次真实任务前须确认模型、权限、费用和运行目录。本次没有发送模型请求。
+模型和认证遵循所选 Pi/provider 的配置。不得把真实密钥写入本仓库。角色没有模型覆盖时，工具传递父代理选定的提供商与模型；角色工具白名单和取消信号也传入服务。子进程关闭自动扩展加载，因此仅由扩展注册的自定义提供商不能直接在子进程使用。首次真实任务前仍须核对认证、模型可用性、费用和运行目录；本轮没有发送模型请求。
+
+CLI 定位优先核对实际 Pi 包元数据，并使用当前 Node 运行其入口，避免 Windows 命令包装器解析问题。特殊安装布局可通过 `PI_SUBAGENT_PI_PATH` 指定已安装 Pi CLI 的绝对 JavaScript 文件路径；此参数是可执行入口配置，不是提供商地址，不应指向服务脚本或未知代码。无需修改全局配置或原部署来运行[不调用模型的检查](TESTING.md)。
 
 ## 停用与卸载
 

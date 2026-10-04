@@ -127,6 +127,10 @@ README、docs 六篇、忽略规则、发布清单、发布导出脚本及两个
 
 后续增量新增 `README.zh-CN.md`、`docs/DEMO.md`、`scripts/create-demo.mjs`、`scripts/check-demo.mjs` 和 `public/examples/scout-plan-project/`。中文版基于英文 README 翻译；演示文档、脚本、合成阅读清单及人工计划验收标准为本轮创建，不是复制的私人项目或真实模型运行记录。该合成示例的 package 标记为 `private`，没有外部依赖，也没有新增覆盖未知代码的统一许可证。具体文件范围以更新后的公开清单为准；原 `.pi` 部署和来源未确认的原文件未修改。
 
+子代理可靠性修复只作用于独立候选仓库的 `public/extensions/subagent/index.ts`、`subagent-client.ts` 和 `subagent-server.ts`，包括启动入口、ID／通知路由、配置传递、队列、取消与清理；相关不可达重复启动代码已从公开副本移除。它们不再是整理时的字节一致副本，变换已写入清单。原工作区 `.pi` 中的文件保留原位，原始未知来源与授权结论未改变。
+
+新增 `subagent-process.ts` 为本轮编写的共享进程处理，保持本地增量授权待确认状态。`tests/subagent.test.mjs`、三份合成进程夹具和 `docs/TESTING.md` 是本轮创建的验证材料，不含真实模型记录或其他项目代码；没有为新增或修改内容擅自赋予统一 MIT 许可证。
+
 公开源码副本与原部署源码字节一致；四个角色副本仅去掉模型行，七个提示副本增加显式 project 作用域说明。原 DeepSeek 专用提示及两个非通用角色保留本地，没有改写。公开示例不复制实际记忆、任务结果或凭据。本次新增的上游许可证是从固定基线保留的完整原文，并不覆盖本地未知内容。
 
 pi-reliability-lab 为独立项目，本次没有发现核心代码或配置对它的明确依赖，未合并其内容或测试成果。

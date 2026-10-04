@@ -92,9 +92,9 @@ The source sets **`MAX_PARALLEL_TASKS = 8`** and **`MAX_CONCURRENCY = 4`**. Thes
 
 Agent discovery supports `user` (Pi's user agent directory, the default), `project` (the nearest `.pi/agents/` directory found from the working directory upward), and `both` (project definitions override duplicate user names).
 
-Project-local agents require confirmation by default when an interactive UI is available. The TUI includes task status, completion summaries, and a status badge. Calls attempt the [client](public/extensions/subagent/subagent-client.ts) / [server](public/extensions/subagent/subagent-server.ts) path over stdio JSON-RPC, with a direct-process fallback on failure.
+Project-local agents require confirmation by default when an interactive UI is available. The TUI includes task status, completion summaries, and a status badge. Calls start the [client](public/extensions/subagent/subagent-client.ts) / [server](public/extensions/subagent/subagent-server.ts) using installed Node and stdio JSON-RPC. A startup failure can use the direct-process fallback; an already submitted task is never automatically replayed.
 
-**Worker slots are scheduling slots; individual tasks still launch Pi processes.** They do not permanently reuse a model context. Configuration and cancellation behavior differ between the service and fallback paths.
+**Worker slots are scheduling slots; individual tasks still launch Pi processes.** They do not permanently reuse a model context. Both paths share [process handling](public/extensions/subagent/subagent-process.ts), forward role configuration, and support cancellation. Child processes disable automatic extensions to prevent recursive loading.
 
 ## Built-in Agents
 
@@ -107,7 +107,7 @@ Four [agent definitions](public/agents/) are included:
 | [`worker`](public/agents/worker.md) | Execute delegated tasks and report completed work, changed files, and handoff notes |
 | [`reviewer`](public/agents/reviewer.md) | Review correctness, security, and maintainability; return actionable findings with file and line references using read-only commands |
 
-The public definitions have no fixed model override. Role instructions describe intended behavior; they do not establish enforced tool permissions.
+The public definitions have no fixed model override. Without a role override, the tool forwards the parent's selected provider/model. Declared tools are forwarded to Pi's CLI allowlist. Role instructions describe intended behavior; they do not establish an OS permission boundary.
 
 ## Prompt Workflows
 
@@ -137,7 +137,7 @@ flowchart TD
     Tool --> Client["Subagent client"]
     Client -->|stdio JSON-RPC| Server["Subagent server / scheduling slots"]
     Server --> Children["Pi processes launched per task"]
-    Tool -.->|on service failure| Fallback["Direct-process fallback"]
+    Tool -.->|on startup failure| Fallback["Direct-process fallback"]
     Fallback --> Children
 ```
 
@@ -247,10 +247,10 @@ The repository uses an explicit public allowlist. Its ignore rules do not automa
 
 ## Known Limitations
 
-- **Dependencies:** no root package or lockfile. The client invokes unpinned `npx tsx`, which may download code and need network access; independent service module resolution has not been validated like Pi's extension loader.
-- **Validation:** release checks covered syntax, registration, configuration/discovery, and prompt parsing/expansion. Real model requests, full workflows, cancellation, timeout, failure recovery, and cleanup still need end-to-end testing.
-- **Service vs. fallback:** the service request does not forward role `model` / `tools` settings or the caller's cancellation signal; the fallback accepts them. Intended role restrictions and model inheritance are not guaranteed across both paths.
-- **Process launch:** Windows `npx`, Pi command wrappers, and Node-based launch branches need further end-to-end validation. Worker slots do not preserve model contexts across tasks.
+- **Dependencies:** no root package or lockfile. Pi's loader supplies the extension's host modules. The service uses Node's native TypeScript support and built-in modules; it does not invoke `npx` or download a runtime. The tested service baseline is Node.js 24.15.0 on Windows.
+- **Validation:** 19 process/protocol tests use a synthetic child CLI. Pi 0.84.2 version/help, extension loading, and synthetic tool-entry handoffs were also checked. Real model requests, model-driven workflows, provider cancellation, and live TUI behavior still need end-to-end validation.
+- **Service vs. fallback:** both forward role `model` / `tools` settings and use shared process handling. Startup failure may fall back; execution with an unknown outcome fails without automatic replay. Provider authentication and availability remain runtime requirements.
+- **Process launch:** the installed Pi CLI is resolved from package metadata or `PI_SUBAGENT_PI_PATH`; command wrappers and the server script are not used as the task entry point. Child extensions are disabled, so providers registered only by an extension are unavailable there. Graceful shutdown cleans temporary prompts; abrupt OS/process termination may leave temporary files. Worker slots do not preserve model contexts across tasks.
 - **Heuristics:** output text can be misclassified as verification success. Phase labels and learned patterns inherit that uncertainty. Character budget configuration is not a hard execution or token cap.
 - **Memory:** records can contain sensitive context. The JSON writer has no explicit lock or atomic update; concurrent writers have not been validated. Learned skills are mainly embedded in memory JSON, not loaded from independent skill files.
 - **Permissions and rights:** role instructions, confirmations, and protected-path matching are not a security sandbox. Provenance and licensing remain incomplete for local additions and modifications.
@@ -274,6 +274,9 @@ scripts/
   create-demo.mjs                  # Explicit offline sample preparation
   check-demo.mjs                   # Sample baseline and copy integrity checks
   prepare-public-release.py        # Offline check and local candidate export
+tests/
+  subagent.test.mjs                # Synthetic process / protocol regression tests
+  fixtures/                       # Synthetic child and service fixtures
 .gitignore                        # Exact public allowlist
 ```
 
@@ -294,6 +297,14 @@ Export first runs the checks, then copies only listed files into a new directory
 
 The script does not publish packages, push Git, grant publication rights, or prove that no secrets exist. A passing result is a candidate-file check, not a model-workflow test. See [Release Validation](docs/PUBLIC_RELEASE.md) for evidence and remaining work.
 
+Run the model-free behavior suite with the tested Node baseline:
+
+```console
+node --test tests/subagent.test.mjs
+```
+
+See [Testing](docs/TESTING.md) for the scope, actual Pi smoke checks, and remaining model validation. The four sample-project tests are separate from these 19 transport/process tests.
+
 ## Documentation
 
 Detailed notes are currently written in Chinese.
@@ -301,6 +312,7 @@ Detailed notes are currently written in Chinese.
 | Document | Contents |
 | --- | --- |
 | [Demo Guide](docs/DEMO.md) | Featured planning scenario, synthetic fixture, acceptance rubric, and recording checklist |
+| [Testing](docs/TESTING.md) | Model-free process/protocol checks and actual Pi smoke-check boundaries |
 | [Installation](docs/INSTALLATION.md) | Baseline, Windows setup, configuration, disabling and uninstalling |
 | [Usage](docs/USAGE.md) | Tool arguments, harness behavior, runtime data, and service-path boundaries |
 | [Project Structure](docs/PROJECT_STRUCTURE.md) | Public candidate layout and original workspace separation |

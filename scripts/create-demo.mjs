@@ -9,7 +9,7 @@ const sampleFiles = [
   "package.json", "README.md", "TASK.md", "src/catalog.mjs", "src/cli.mjs",
   "data/books.json", "test/catalog.test.mjs",
 ];
-const extensionFiles = ["index.ts", "agents.ts", "subagent-client.ts", "subagent-server.ts"];
+const extensionFiles = ["index.ts", "agents.ts", "subagent-client.ts", "subagent-server.ts", "subagent-process.ts"];
 
 function parseArgs(args) {
   const result = { output: ".local-audit/scout-plan-demo" };

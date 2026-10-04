@@ -12,7 +12,7 @@ const sourceFiles = [
 ];
 const generatedFiles = [
   ...sourceFiles,
-  ...["index.ts", "agents.ts", "subagent-client.ts", "subagent-server.ts"].map((name) => ".pi/extensions/subagent/" + name),
+  ...["index.ts", "agents.ts", "subagent-client.ts", "subagent-server.ts", "subagent-process.ts"].map((name) => ".pi/extensions/subagent/" + name),
   ".pi/agents/scout.md", ".pi/agents/planner.md", ".pi/prompts/scout-and-plan.md",
 ];
 

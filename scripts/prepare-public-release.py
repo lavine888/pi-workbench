@@ -80,7 +80,7 @@ def load_and_check():
                     findings.append({'path':name, 'line':content[:content.find(']('+target+')')].count('\n')+1,
                                      'category':'broken_local_link', 'recommendation':'Fix the local link.'})
     actual = set()
-    for directory in ['docs', 'public', 'scripts']:
+    for directory in ['docs', 'public', 'scripts', 'tests']:
         actual.update(p.relative_to(ROOT).as_posix() for p in (ROOT/directory).rglob('*') if p.is_file())
     extra = actual - set(paths)
     for name in sorted(extra):

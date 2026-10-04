@@ -92,9 +92,9 @@ Pi 已有[子代理示例](https://github.com/earendil-works/pi/tree/v0.84.1/pac
 
 代理发现支持三种范围：`user` 为 Pi 的用户代理目录，也是默认值；`project` 为从工作目录向上查找的最近 `.pi/agents/` 目录；`both` 同时使用两者，同名时项目定义覆盖用户定义。
 
-在可用的交互界面中，项目级代理默认需要确认。终端界面包含任务状态、完成摘要和状态标记。调用先尝试通过 stdio JSON-RPC 使用[客户端](public/extensions/subagent/subagent-client.ts)与[服务端](public/extensions/subagent/subagent-server.ts)，失败时回退为直接启动进程。
+在可用的交互界面中，项目级代理默认需要确认。终端界面包含任务状态、完成摘要和状态标记。调用通过已安装的 Node 和 stdio JSON-RPC 启动[客户端](public/extensions/subagent/subagent-client.ts)与[服务端](public/extensions/subagent/subagent-server.ts)。启动失败时可回退为直接启动进程；已提交的任务不会自动重复执行。
 
-**Worker 槽位用于调度；每个任务仍会启动 Pi 进程。** 槽位不会持续复用模型上下文。服务路径与回退路径的配置传递和取消行为存在差异。
+**Worker 槽位用于调度；每个任务仍会启动 Pi 进程。** 槽位不会持续复用模型上下文。两条路径共享[进程处理逻辑](public/extensions/subagent/subagent-process.ts)，传递角色配置并支持取消。子进程关闭自动扩展加载，避免递归加载。
 
 ## 内置代理
 
@@ -107,7 +107,7 @@ Pi 已有[子代理示例](https://github.com/earendil-works/pi/tree/v0.84.1/pac
 | [`worker`](public/agents/worker.md) | 执行委派任务，汇报完成内容、修改文件和交接说明 |
 | [`reviewer`](public/agents/reviewer.md) | 审查正确性、安全性和可维护性；使用只读命令，返回带文件和行号的可执行建议 |
 
-公开定义没有固定模型覆盖项。角色提示描述预期行为，不构成强制执行的工具权限控制。
+公开定义没有固定模型覆盖项。角色未指定模型时，工具传递父代理选定的提供商与模型。声明的工具会传递给 Pi CLI 白名单。角色提示描述预期行为，不构成操作系统权限边界。
 
 ## 提示工作流
 
@@ -137,7 +137,7 @@ flowchart TD
     Tool --> Client["子代理客户端"]
     Client -->|stdio JSON-RPC| Server["子代理服务端 / 调度槽位"]
     Server --> Children["每个任务启动的 Pi 进程"]
-    Tool -.->|服务失败时| Fallback["直接启动进程的回退路径"]
+    Tool -.->|启动失败时| Fallback["直接启动进程的回退路径"]
     Fallback --> Children
 ```
 
@@ -247,10 +247,10 @@ Pi 会发现顶层扩展和子代理目录的 `index.ts`。空配置示例不会
 
 ## 已知限制
 
-- **依赖：** 根目录没有 package 或 lockfile。客户端调用未固定版本的 `npx tsx`，可能需要网络并下载代码；独立服务的模块解析尚未像 Pi 扩展加载器一样完成验证。
-- **验证范围：** 公开候选检查覆盖语法、注册、配置／发现及提示解析／展开。真实模型请求、完整工作流、取消、超时、失败恢复及清理仍需端到端测试。
-- **服务与回退路径：** 服务请求未传递角色的 `model` / `tools` 配置或调用者的取消信号；回退路径接受这些参数。两条路径无法保证一致的角色限制与模型继承行为。
-- **进程启动：** Windows 下的 `npx`、Pi 命令包装器及基于 Node 的启动分支仍需进一步端到端验证。Worker 槽位不会保留跨任务的模型上下文。
+- **依赖：** 根目录没有 package 或 lockfile。Pi 加载器提供扩展使用的宿主模块。服务使用 Node 原生 TypeScript 支持和内置模块，不调用 `npx` 或下载运行器。已测试服务基线为 Windows 上的 Node.js 24.15.0。
+- **验证范围：** 19 项进程／协议测试使用合成子 CLI；另核对了 Pi 0.84.2 版本／帮助、扩展加载和合成工具入口交接。真实模型请求、模型驱动工作流、提供商侧取消及实际终端界面仍需端到端验证。
+- **服务与回退路径：** 两者均传递角色的 `model` / `tools` 配置，并使用共享进程处理逻辑。启动失败可回退；执行结果未知时报告失败，不自动重复执行。提供商认证及可用性仍须在运行时满足。
+- **进程启动：** 根据包元数据或 `PI_SUBAGENT_PI_PATH` 定位已安装 Pi CLI，不把命令包装器或服务脚本当作任务入口。子扩展被禁用，因此仅由扩展注册的提供商在子进程中不可用。正常关闭会清理临时提示；操作系统或进程被强行终止时可能遗留临时文件。Worker 槽位不会保留跨任务的模型上下文。
 - **启发式规则：** 输出文本可能被误判为验证成功，阶段标签和学习到的模式也受此影响。字符预算配置不是强制执行上限或 token 上限。
 - **记忆：** 记录可能含敏感上下文。JSON 写入没有显式锁或原子更新；并发写入尚未验证。学习到的技能主要保存在记忆 JSON 中，不是从独立技能文件加载。
 - **权限与授权：** 角色提示、确认和受保护路径匹配不构成安全沙箱。本地新增与改编内容的来源和许可证仍未全部确认。
@@ -274,6 +274,9 @@ scripts/
   create-demo.mjs                  # 按显式清单准备离线示例
   check-demo.mjs                   # 示例基线与副本完整性检查
   prepare-public-release.py        # 离线检查与本地候选副本导出
+tests/
+  subagent.test.mjs                # 合成进程／协议回归测试
+  fixtures/                       # 合成子进程与服务夹具
 .gitignore                        # 精确的公开文件白名单
 ```
 
@@ -294,6 +297,14 @@ python scripts/prepare-public-release.py --output .local-audit/release-candidate
 
 该脚本不发布包、不推送 Git、不赋予公开授权，也不能证明不存在任何秘密。检查通过代表候选文件检查通过，不代表模型工作流测试通过。实际证据和剩余事项见[公开前验收](docs/PUBLIC_RELEASE.md)。
 
+使用已测试的 Node 基线运行不调用模型的行为检查：
+
+```console
+node --test tests/subagent.test.mjs
+```
+
+范围、实际 Pi 基础检查和剩余模型验证见[测试说明](docs/TESTING.md)。示例项目的四个测试与这 19 项进程／协议检查分别记录。
+
 ## 文档导航
 
 详细说明目前使用中文。
@@ -301,6 +312,7 @@ python scripts/prepare-public-release.py --output .local-audit/release-candidate
 | 文档 | 内容 |
 | --- | --- |
 | [演示指南](docs/DEMO.md) | 主打规划场景、合成示例、验收标准和录制清单 |
+| [测试说明](docs/TESTING.md) | 不调用模型的进程／协议检查与实际 Pi 基础检查边界 |
 | [安装说明](docs/INSTALLATION.md) | 环境基线、Windows 安装、配置、禁用和卸载 |
 | [使用说明](docs/USAGE.md) | 工具参数、harness 行为、运行数据和服务路径边界 |
 | [目录结构](docs/PROJECT_STRUCTURE.md) | 公开候选布局与原始工作区隔离 |

@@ -57,6 +57,12 @@
       "transformation": "none"
     },
     {
+      "path": "docs/TESTING.md",
+      "source": "created-for-this-task",
+      "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
       "path": "docs/THIRD_PARTY_NOTICES.md",
       "source": "created-for-this-task",
       "provenance": "release-preparation",
@@ -174,19 +180,25 @@
       "path": "public/extensions/subagent/index.ts",
       "source": ".pi/extensions/subagent/index.ts",
       "provenance": "upstream-derived-local-rights-pending",
-      "transformation": "byte-identical copy"
+      "transformation": "public-copy fixes: configuration forwarding, startup-only fallback, lifecycle hooks; remove unreachable duplicate launch code"
     },
     {
       "path": "public/extensions/subagent/subagent-client.ts",
       "source": ".pi/extensions/subagent/subagent-client.ts",
       "provenance": "local-origin-rights-pending",
-      "transformation": "byte-identical copy"
+      "transformation": "public-copy fixes: native Node service startup, request routing, per-task notifications, cancellation and cleanup"
+    },
+    {
+      "path": "public/extensions/subagent/subagent-process.ts",
+      "source": "created-for-this-task",
+      "provenance": "local-origin-rights-pending",
+      "transformation": "none"
     },
     {
       "path": "public/extensions/subagent/subagent-server.ts",
       "source": ".pi/extensions/subagent/subagent-server.ts",
       "provenance": "local-origin-rights-pending",
-      "transformation": "byte-identical copy"
+      "transformation": "public-copy fixes: preserve request IDs, reuse scheduling slots, drain queues and share process runner"
     },
     {
       "path": "public/licenses/PI-MIT.txt",
@@ -258,6 +270,30 @@
       "path": "scripts/prepare-public-release.py",
       "source": "created-for-this-task",
       "provenance": "release-preparation",
+      "transformation": "none"
+    },
+    {
+      "path": "tests/fixtures/child-cli.mjs",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-test",
+      "transformation": "none"
+    },
+    {
+      "path": "tests/fixtures/never-ready-server.mjs",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-test",
+      "transformation": "none"
+    },
+    {
+      "path": "tests/fixtures/unresponsive-server.mjs",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-test",
+      "transformation": "none"
+    },
+    {
+      "path": "tests/subagent.test.mjs",
+      "source": "created-for-this-task",
+      "provenance": "synthetic-test",
       "transformation": "none"
     }
   ]

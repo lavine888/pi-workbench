@@ -11,6 +11,7 @@
 !/docs/PROJECT_STRUCTURE.md
 !/docs/PROVENANCE.md
 !/docs/PUBLIC_RELEASE.md
+!/docs/TESTING.md
 !/docs/THIRD_PARTY_NOTICES.md
 !/docs/USAGE.md
 !/public/
@@ -51,6 +52,7 @@
 !/public/extensions/subagent/agents.ts
 !/public/extensions/subagent/index.ts
 !/public/extensions/subagent/subagent-client.ts
+!/public/extensions/subagent/subagent-process.ts
 !/public/extensions/subagent/subagent-server.ts
 !/public/licenses/
 /public/licenses/*
@@ -69,4 +71,12 @@
 !/scripts/check-demo.mjs
 !/scripts/create-demo.mjs
 !/scripts/prepare-public-release.py
+!/tests/
+/tests/*
+!/tests/subagent.test.mjs
+!/tests/fixtures/
+/tests/fixtures/*
+!/tests/fixtures/child-cli.mjs
+!/tests/fixtures/never-ready-server.mjs
+!/tests/fixtures/unresponsive-server.mjs
 /.local-audit/

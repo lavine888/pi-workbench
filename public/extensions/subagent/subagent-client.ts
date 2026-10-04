@@ -8,7 +8,9 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as readline from "node:readline";
+import { fileURLToPath } from "node:url";
+import { StringDecoder } from "node:string_decoder";
+import { getPiInvocation, runPiProcess, terminateChild, TASK_TIMEOUT_MS, type PiInvocation, type ProcessResult } from "./subagent-process.ts";
 import type { Message } from "@earendil-works/pi-ai";
 
 // ── 类型 ──────────────────────────────────────────────────────────
@@ -73,303 +75,219 @@ type JsonRpcMessage = JsonRpcRequest | JsonRpcResponse | JsonRpcNotification;
 
 // ── 配置 ──────────────────────────────────────────────────────────
 
-const CONFIG = {
-  serverStartTimeoutMs: 10_000,   // 服务器启动超时
-  requestTimeoutMs: 10 * 60 * 1000,  // 请求超时
-  reconnectDelayMs: 1000,         // 重连延迟
-  maxReconnectAttempts: 3,        // 最大重连次数
-};
-
 // ── Subagent Server 管理器 ──────────────────────────────────────
+
+export interface ServerOptions {
+  piInvocation?: PiInvocation;
+  serverScriptPath?: string;
+  serverStartTimeoutMs?: number;
+  requestTimeoutMs?: number;
+  taskTimeoutMs?: number;
+  maxWorkers?: number;
+}
 
 export class SubagentServerManager {
   private serverProcess: ReturnType<typeof spawn> | null = null;
-  private serverReady: boolean = false;
+  private serverReady = false;
   private requestIdCounter = 0;
-  private pendingRequests = new Map<string | number, {
-    resolve: (result: any) => void;
-    reject: (err: Error) => void;
-  }>();
-  private messageHandlers = new Map<string, (params: any) => void>();
-  private stdoutBuffer = "";
-  private rl: readline.Interface | null = null;
-  private serverScriptPath: string;
   private startPromise: Promise<void> | null = null;
+  private shutdownPromise: Promise<void> | null = null;
+  private pendingRequests = new Map<string | number, { resolve: (value: any) => void; reject: (error: Error) => void }>();
+  private messageHandlers = new Map<string, Set<(params: any) => void>>();
+  private taskHandlers = new Map<string | number, (message: Message) => void>();
+  private options: ServerOptions;
+  private serverScriptPath: string;
 
-  constructor() {
-    // 找到 subagent-server.ts 的路径
-    this.serverScriptPath = path.resolve(__dirname, "subagent-server.ts");
-    // 如果 .ts 不存在，尝试 .js
-    if (!fs.existsSync(this.serverScriptPath)) {
-      const jsPath = this.serverScriptPath.replace(/\.ts$/, ".js");
-      if (fs.existsSync(jsPath)) {
-        this.serverScriptPath = jsPath;
-      }
-    }
+  constructor(options: ServerOptions = {}) {
+    this.options = options;
+    this.serverScriptPath = options.serverScriptPath ?? fileURLToPath(new URL("./subagent-server.ts", import.meta.url));
+    if (!options.serverScriptPath && !fs.existsSync(this.serverScriptPath)) this.serverScriptPath = this.serverScriptPath.replace(/\.ts$/, ".js");
   }
 
-  /**
-   * 确保服务器正在运行
-   */
   async ensureRunning(): Promise<void> {
-    if (this.serverReady && this.serverProcess && !this.serverProcess.killed) {
-      return;
-    }
-
-    if (this.startPromise) {
-      return this.startPromise;
-    }
-
-    this.startPromise = this.startServer();
-    try {
-      await this.startPromise;
-    } finally {
-      this.startPromise = null;
-    }
+    if (this.shutdownPromise) throw new Error("Subagent service is shutting down");
+    if (this.isRunning) return;
+    const pending = this.startPromise ?? (this.startPromise = this.startServer());
+    try { await pending; }
+    finally { if (this.startPromise === pending) this.startPromise = null; }
   }
 
   private startServer(): Promise<void> {
     return new Promise((resolve, reject) => {
+      let settled = false;
+      let proc: ReturnType<typeof spawn>;
+      const finishStart = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        if (error) reject(error); else resolve();
+      };
       const timeout = setTimeout(() => {
-        reject(new Error("Subagent server start timed out"));
-      }, CONFIG.serverStartTimeoutMs);
-
+        finishStart(new Error("Subagent server start timed out"));
+        this.dispose();
+      }, this.options.serverStartTimeoutMs ?? 10_000);
       try {
-        const isWindows = process.platform === "win32";
-        const serverFile = this.serverScriptPath;
-
-        // 用 tsx 或 node 运行服务器
-        let command: string;
-        let args: string[];
-
-        if (serverFile.endsWith(".ts")) {
-          // 尝试用 tsx 运行
-          command = "npx";
-          args = ["tsx", serverFile];
-        } else {
-          command = process.execPath;
-          args = [serverFile];
-        }
-
-        const proc = spawn(command, args, {
-          stdio: ["pipe", "pipe", "pipe"],
-          shell: false,
-        });
-
+        const invocation = this.options.piInvocation ?? getPiInvocation();
+        proc = spawn(process.execPath, [
+          this.serverScriptPath, "--pi-invocation", JSON.stringify(invocation),
+          "--task-timeout-ms", String(this.options.taskTimeoutMs ?? TASK_TIMEOUT_MS),
+          "--max-workers", String(this.options.maxWorkers ?? 4),
+        ], { shell: false, windowsHide: true, detached: process.platform !== "win32", stdio: ["pipe", "pipe", "pipe"] });
         this.serverProcess = proc;
-
-        // 解析 stdout (JSON-RPC 消息)
+        const decoder = new StringDecoder("utf8");
         let buffer = "";
         const onLine = (line: string) => {
-          if (!line.trim()) return;
-          let msg: JsonRpcMessage;
-          try {
-            msg = JSON.parse(line);
-          } catch {
-            return;
-          }
-
-          // 处理响应
-          if ("id" in msg && ("result" in msg || "error" in msg)) {
-            const resp = msg as JsonRpcResponse;
-            const id = resp.id;
-            if (id !== undefined) {
-              const pending = this.pendingRequests.get(id);
-              if (pending) {
+          let message: JsonRpcMessage;
+          try { message = JSON.parse(line); } catch { return; }
+          if (!message || typeof message !== "object" || message.jsonrpc !== "2.0") return;
+          if ("id" in message && ("result" in message || "error" in message)) {
+            const response = message as JsonRpcResponse;
+            if (response.id === undefined) return;
+            const pending = this.pendingRequests.get(response.id);
+            if (!pending) return;
+            this.pendingRequests.delete(response.id);
+            if (response.error) pending.reject(new Error(response.error.message));
+            else pending.resolve(response.result);
+          } else if ("method" in message && !("id" in message)) {
+            const notification = message as JsonRpcNotification;
+            if (notification.method === "server_ready" && this.serverProcess === proc && !settled) {
+              this.serverReady = true;
+              finishStart();
+            }
+            if (notification.method === "message" && notification.params?.message) {
+              const id = notification.params.id as string | number;
+              try { this.taskHandlers.get(id)?.(notification.params.message as Message); }
+              catch {
+                const pending = this.pendingRequests.get(id);
                 this.pendingRequests.delete(id);
-                if (resp.error) {
-                  pending.reject(new Error(resp.error.message));
-                } else {
-                  pending.resolve(resp.result);
-                }
+                pending?.reject(new Error("Subagent progress callback failed"));
+                void this.cancelTask(id);
               }
             }
-          }
-
-          // 处理通知
-          if ("method" in msg && !("id" in msg)) {
-            const notif = msg as JsonRpcNotification;
-            const handler = this.messageHandlers.get(notif.method);
-            if (handler) {
-              handler(notif.params);
-            }
-
-            // server_ready 通知
-            if (notif.method === "server_ready") {
-              clearTimeout(timeout);
-              this.serverReady = true;
-              resolve();
+            for (const handler of this.messageHandlers.get(notification.method) ?? []) {
+              try { handler(notification.params); }
+              catch { this.dispose(new Error("Subagent notification callback failed")); }
             }
           }
         };
-
-        proc.stdout.on("data", (data: Buffer) => {
-          buffer += data.toString();
+        proc.stdout.on("data", (chunk: Buffer) => {
+          buffer += decoder.write(chunk);
           const lines = buffer.split("\n");
           buffer = lines.pop() || "";
           for (const line of lines) onLine(line);
         });
-
-        proc.stderr.on("data", (data: Buffer) => {
-          // stderr 是日志，忽略或调试用
+        proc.stderr.resume();
+        proc.stdin.on("error", (error) => { if (this.serverProcess === proc) this.dispose(new Error(`Subagent service input failed (${(error as NodeJS.ErrnoException).code || "pipe"})`)); });
+        proc.on("error", (error: NodeJS.ErrnoException) => {
+          finishStart(new Error(`Failed to start subagent server (${error.code || "spawn"})`));
         });
-
         proc.on("close", (code) => {
-          this.serverReady = false;
+          buffer += decoder.end();
+          if (buffer.trim()) onLine(buffer);
+          finishStart(new Error(`Subagent server exited before readiness (${code})`));
+          if (this.serverProcess !== proc) return;
           this.serverProcess = null;
-
-          // 拒绝所有待处理的请求
-          for (const [id, pending] of this.pendingRequests) {
-            pending.reject(new Error(`Server disconnected (exit code: ${code})`));
-          }
-          this.pendingRequests.clear();
-        });
-
-        proc.on("error", (err) => {
-          clearTimeout(timeout);
           this.serverReady = false;
-          this.serverProcess = null;
-          reject(new Error(`Failed to start subagent server: ${err.message}`));
+          this.rejectPending(new Error(`Subagent server disconnected (${code})`));
         });
-      } catch (err) {
-        clearTimeout(timeout);
-        reject(err);
-      }
+      } catch (error) { finishStart(error as Error); }
     });
   }
 
-  /**
-   * 发送 JSON-RPC 请求
-   */
-  private async sendRequest(method: string, params: Record<string, unknown>): Promise<any> {
-    await this.ensureRunning();
+  private rejectPending(error: Error): void {
+    for (const pending of this.pendingRequests.values()) pending.reject(error);
+    this.pendingRequests.clear();
+  }
 
-    const id = ++this.requestIdCounter;
-
+  private sendRequest(method: string, params: Record<string, unknown>, id = ++this.requestIdCounter): Promise<any> {
     return new Promise((resolve, reject) => {
+      const proc = this.serverProcess;
+      if (!this.isRunning || !proc?.stdin.writable) { reject(new Error("Subagent service is not connected")); return; }
       const timeout = setTimeout(() => {
-        this.pendingRequests.delete(id);
-        reject(new Error(`Request timed out: ${method}`));
-      }, CONFIG.requestTimeoutMs);
-
+        // An unresponsive service has an unknown execution outcome. Stop it;
+        // callers must not replay a possibly completed task automatically.
+        this.dispose(new Error(`Subagent request timed out: ${method}`));
+      }, this.options.requestTimeoutMs ?? TASK_TIMEOUT_MS + 10_000);
       this.pendingRequests.set(id, {
-        resolve: (result) => {
-          clearTimeout(timeout);
-          resolve(result);
-        },
-        reject: (err) => {
-          clearTimeout(timeout);
-          reject(err);
-        },
+        resolve: (value) => { clearTimeout(timeout); resolve(value); },
+        reject: (error) => { clearTimeout(timeout); reject(error); },
       });
-
-      const request: JsonRpcRequest = {
-        jsonrpc: "2.0",
-        id,
-        method,
-        params,
-      };
-
-      if (this.serverProcess && !this.serverProcess.killed && this.serverProcess.stdin) {
-        this.serverProcess.stdin.write(JSON.stringify(request) + "\n");
-      } else {
-        this.pendingRequests.delete(id);
-        clearTimeout(timeout);
-        reject(new Error("Server not connected"));
-      }
+      proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n", (error) => {
+        if (error && this.serverProcess === proc) this.dispose(new Error("Subagent service write failed"));
+      });
     });
   }
 
-  /**
-   * 注册通知处理器
-   */
-  onNotification(method: string, handler: (params: any) => void): void {
-    this.messageHandlers.set(method, handler);
+  onNotification(method: string, handler: (params: any) => void): () => void {
+    let handlers = this.messageHandlers.get(method);
+    if (!handlers) { handlers = new Set(); this.messageHandlers.set(method, handlers); }
+    handlers.add(handler);
+    return () => { handlers!.delete(handler); if (!handlers!.size) this.messageHandlers.delete(method); };
   }
 
-  /**
-   * 执行任务
-   */
   async executeTask(
-    agent: string,
-    task: string,
-    systemPrompt: string,
-    cwd: string,
-    onMessage?: (msg: Message) => void,
-  ): Promise<{
-    messages: Message[];
-    usage: UsageStats;
-    model?: string;
-    stopReason?: string;
-    errorMessage?: string;
-    stderr: string;
-    exitCode: number;
-    aborted?: boolean;
-  }> {
-    // 注册消息流通知
-    const messageHandler = (params: any) => {
-      if (params && params.id === agent && params.message && onMessage) {
-        onMessage(params.message as Message);
-      }
-    };
-
-    this.onNotification("message", messageHandler);
-
+    agent: string, task: string, systemPrompt: string, cwd: string,
+    onMessage?: (message: Message) => void,
+    options: { model?: string; tools?: string[]; signal?: AbortSignal } = {},
+  ): Promise<ProcessResult> {
+    if (options.signal?.aborted) throw new Error("Subagent was aborted");
+    await this.ensureRunning();
+    if (options.signal?.aborted) throw new Error("Subagent was aborted");
+    const id = ++this.requestIdCounter;
+    this.taskHandlers.set(id, onMessage ?? (() => {}));
+    const abort = () => { void this.cancelTask(id); };
+    options.signal?.addEventListener("abort", abort, { once: true });
     try {
-      const result = await this.sendRequest("execute", {
-        agent,
-        task,
-        systemPrompt,
-        cwd,
-      });
-
-      return result as any;
+      return await this.sendRequest("execute", { agent, task, systemPrompt, cwd, model: options.model, tools: options.tools }, id);
     } finally {
-      this.messageHandlers.delete("message");
+      options.signal?.removeEventListener("abort", abort);
+      this.taskHandlers.delete(id);
     }
   }
 
-  /**
-   * 取消任务
-   */
-  async cancelTask(taskId: string): Promise<boolean> {
-    try {
-      await this.sendRequest("cancel", { id: taskId });
-      return true;
-    } catch {
-      return false;
-    }
+  async cancelTask(taskId: string | number): Promise<boolean> {
+    if (!this.isRunning) return false;
+    try { return Boolean((await this.sendRequest("cancel", { id: taskId })).cancelled); }
+    catch { return false; }
   }
 
-  /**
-   * 获取服务器状态
-   */
-  async getStatus(): Promise<any> {
-    return this.sendRequest("status", {});
-  }
+  async getStatus(): Promise<any> { await this.ensureRunning(); return this.sendRequest("status", {}); }
 
-  /**
-   * 关闭服务器
-   */
   async shutdown(): Promise<void> {
-    try {
-      await this.sendRequest("shutdown", {});
-    } catch {
-      // 忽略关闭时的错误
-    }
+    if (this.shutdownPromise) return this.shutdownPromise;
+    const proc = this.serverProcess;
+    if (!proc) return;
+    this.shutdownPromise = (async () => {
+      try {
+        if (this.isRunning) await this.sendRequest("shutdown", {});
+        else this.dispose();
+        if (proc.exitCode === null && proc.signalCode === null) {
+          await new Promise<void>((resolve) => {
+            const timeout = setTimeout(() => { this.dispose(); resolve(); }, 2000);
+            proc.once("close", () => { clearTimeout(timeout); resolve(); });
+          });
+        }
+      } finally { this.dispose(); }
+    })();
+    try { await this.shutdownPromise; } finally { this.shutdownPromise = null; }
+  }
 
-    if (this.serverProcess && !this.serverProcess.killed) {
-      this.serverProcess.kill("SIGTERM");
-    }
+  /** Synchronous parent-exit path: EOF asks the existing server to clean up. */
+  disconnect(): void { this.serverProcess?.stdin.end(); }
 
-    this.serverReady = false;
+  /** Emergency stop for a failed transport; never starts a server. */
+  dispose(error = new Error("Subagent service stopped")): void {
+    const proc = this.serverProcess;
     this.serverProcess = null;
+    this.serverReady = false;
+    this.rejectPending(error);
+    if (proc) terminateChild(proc);
   }
 
-  get isRunning(): boolean {
-    return this.serverReady && this.serverProcess !== null && !this.serverProcess.killed;
-  }
+  get isRunning(): boolean { return Boolean(this.serverReady && this.serverProcess && this.serverProcess.exitCode === null && this.serverProcess.signalCode === null); }
+  get pendingTaskCount(): number { return this.taskHandlers.size; }
 }
+
 
 // ── 全局单例 ────────────────────────────────────────────────────
 
@@ -382,168 +300,48 @@ export function getServerManager(): SubagentServerManager {
   return globalServerManager;
 }
 
+export function getActiveServerManager(): SubagentServerManager | null {
+  return globalServerManager;
+}
+
 export function resetServerManager(): void {
   if (globalServerManager) {
-    globalServerManager.shutdown().catch(() => {});
+    const manager = globalServerManager;
+    manager.shutdown().catch(() => { console.error("[subagent] Service cleanup failed."); manager.dispose(); });
     globalServerManager = null;
   }
 }
 
 // ── 兼容层：老式 spawn 回退 ─────────────────────────────────────
 
-import { spawn as nodeSpawn } from "node:child_process";
-import * as os from "node:os";
-
 export async function runSingleAgentFallback(
-  defaultCwd: string,
-  agent: AgentConfig,
-  task: string,
-  cwd: string | undefined,
-  step: number | undefined,
-  signal: AbortSignal | undefined,
+  defaultCwd: string, agent: AgentConfig, task: string, cwd: string | undefined,
+  step: number | undefined, signal: AbortSignal | undefined,
   onUpdate?: (result: SingleResult) => void,
+  options: { invocation?: PiInvocation; timeoutMs?: number } = {},
 ): Promise<SingleResult> {
-  const args: string[] = ["--mode", "json", "-p", "--no-session"];
-  if (agent.model) args.push("--model", agent.model);
-  if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
-
-  let tmpPromptDir: string | null = null;
-  let tmpPromptPath: string | null = null;
-
-  const currentResult: SingleResult = {
-    agent: agent.name,
-    agentSource: agent.source,
-    task,
-    exitCode: 0,
-    messages: [],
-    stderr: "",
-    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-    model: agent.model,
-    step,
+  const partial: SingleResult = {
+    agent: agent.name, agentSource: agent.source, task, step, exitCode: -1, messages: [], stderr: "",
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 }, model: agent.model,
   };
-
-  try {
-    if (agent.systemPrompt.trim()) {
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "subagent-"));
-      tmpPromptDir = tmpDir;
-      tmpPromptPath = path.join(tmpDir, "prompt.md");
-      fs.writeFileSync(tmpPromptPath, agent.systemPrompt, "utf-8");
-      args.push("--append-system-prompt", tmpPromptPath);
-    }
-
-    args.push(`Task: ${task}`);
-
-    let wasAborted = false;
-
-    const exitCode = await new Promise<number>((resolve) => {
-      const currentScript = process.argv[1];
-      const isWindows = process.platform === "win32";
-      let command: string;
-      let spawnArgs: string[];
-
-      if (currentScript && fs.existsSync(currentScript)) {
-        command = process.execPath;
-        spawnArgs = [currentScript, ...args];
-      } else {
-        command = "pi";
-        spawnArgs = args;
-      }
-
-      const proc = nodeSpawn(
-        isWindows ? "node" : command,
-        isWindows ? [process.argv[1] || command, ...args] : spawnArgs,
-        {
-          cwd: cwd ?? defaultCwd,
-          shell: false,
-          stdio: ["ignore", "pipe", "pipe"],
-        },
-      );
-
-      const timeout = setTimeout(() => {
-        wasAborted = true;
-        proc.kill("SIGTERM");
-        setTimeout(() => { if (!proc.killed) proc.kill("SIGKILL"); }, 2000);
-      }, 5 * 60 * 1000);
-
-      let buffer = "";
-
-      const processLine = (line: string) => {
-        if (!line.trim()) return;
-        let event: any;
-        try {
-          event = JSON.parse(line);
-        } catch {
-          return;
-        }
-
-        if (event.type === "message_end" && event.message) {
-          const msg = event.message as Message;
-          currentResult.messages.push(msg);
-
-          if (msg.role === "assistant") {
-            currentResult.usage.turns++;
-            const usage = (msg as any).usage;
-            if (usage) {
-              currentResult.usage.input += usage.input || 0;
-              currentResult.usage.output += usage.output || 0;
-              currentResult.usage.cacheRead += usage.cacheRead || 0;
-              currentResult.usage.cacheWrite += usage.cacheWrite || 0;
-              currentResult.usage.cost += usage.cost?.total || 0;
-              currentResult.usage.contextTokens = usage.totalTokens || 0;
-            }
-            if (!currentResult.model && (msg as any).model) currentResult.model = (msg as any).model;
-            if ((msg as any).stopReason) currentResult.stopReason = (msg as any).stopReason;
-            if ((msg as any).errorMessage) currentResult.errorMessage = (msg as any).errorMessage;
-          }
-          if (onUpdate) onUpdate({ ...currentResult });
-        }
-      };
-
-      proc.stdout.on("data", (data: Buffer) => {
-        buffer += data.toString();
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) processLine(line);
-      });
-
-      proc.stderr.on("data", (data: Buffer) => {
-        currentResult.stderr += data.toString();
-      });
-
-      proc.on("close", (code) => {
-        if (buffer.trim()) processLine(buffer);
-        clearTimeout(timeout);
-        resolve(code ?? 0);
-      });
-
-      proc.on("error", () => {
-        clearTimeout(timeout);
-        resolve(1);
-      });
-
-      if (signal) {
-        const killProc = () => {
-          wasAborted = true;
-          proc.kill("SIGTERM");
-          setTimeout(() => { if (!proc.killed) proc.kill("SIGKILL"); }, 5000);
-        };
-        if (signal.aborted) killProc();
-        else signal.addEventListener("abort", killProc, { once: true });
-      }
-    });
-
-    currentResult.exitCode = exitCode;
-    if (wasAborted) throw new Error("Subagent was aborted");
-    return currentResult;
-  } finally {
-    if (tmpPromptPath) {
-      try { fs.unlinkSync(tmpPromptPath); } catch { /* ignore */ }
-    }
-    if (tmpPromptDir) {
-      try { fs.rmdirSync(tmpPromptDir); } catch { /* ignore */ }
-    }
+  const result = await runPiProcess(options.invocation ?? getPiInvocation(), {
+    task, systemPrompt: agent.systemPrompt, cwd: cwd ?? defaultCwd, model: agent.model, tools: agent.tools,
+  }, signal, (_message, progress) => {
+    partial.messages = progress.messages;
+    partial.usage = { ...progress.usage };
+    partial.model = progress.model;
+    partial.stopReason = progress.stopReason;
+    partial.errorMessage = progress.errorMessage;
+    onUpdate?.({ ...partial });
+  }, options.timeoutMs ?? TASK_TIMEOUT_MS);
+  if (result.exitCode === 0 && result.messages.length === 0) {
+    result.exitCode = 1;
+    result.stopReason = "error";
+    result.errorMessage = "Subagent returned no messages; task was not replayed";
   }
+  return { ...partial, ...result };
 }
+
 
 export function getFinalOutput(messages: Message[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {

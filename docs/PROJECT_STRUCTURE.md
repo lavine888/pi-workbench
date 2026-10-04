@@ -10,6 +10,7 @@ README.zh-CN.md
 .gitignore
 docs/
   DEMO.md
+  TESTING.md
   PROJECT_STRUCTURE.md
   PROVENANCE.md
   INSTALLATION.md
@@ -29,6 +30,7 @@ public/
       index.ts
       subagent-client.ts
       subagent-server.ts
+      subagent-process.ts
   agents/                       # 四个通用角色的候选副本
   prompts/                      # 七个提示模板的候选副本
   examples/
@@ -38,9 +40,12 @@ public/
     APPEND_SYSTEM.md
   licenses/
     PI-MIT.txt
+tests/
+  subagent.test.mjs
+  fixtures/                     # 无模型的合成子进程与故障服务
 ```
 
-准确范围以 `public/manifest.json` 为准。公开副本保留源码行为；四个角色的副本仅删除 `model:` 行，不复制本机模型配置。七个提示副本增加显式 project 作用域说明，使其能使用项目角色。原 `deepseek-implement.md` 依赖未纳入清单的专用角色并使用未经确认的参数占位方式，因此保留本地。配置和记忆示例是新建的空配置与合成数据。`.gitignore` 逐文件放行，未列出的新文件默认忽略；必要源码位于公开清单，而原始运行目录整体保留本地。
+准确范围以 `public/manifest.json` 为准。子代理公开副本已增量修复启动、协议、配置传递与清理，并新增共享进程处理模块；原部署与原始文件保持原位。四个角色的副本仅删除 `model:` 行，不复制本机模型配置。七个提示副本增加显式 project 作用域说明，使其能使用项目角色。原 `deepseek-implement.md` 依赖未纳入清单的专用角色并使用未经确认的参数占位方式，因此保留本地。配置和记忆示例是新建的空配置与合成数据。`.gitignore` 逐文件放行，未列出的新文件默认忽略；必要源码位于公开清单，而原始运行目录整体保留本地。
 
 ## 本地原文件与用途
 
