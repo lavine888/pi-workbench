@@ -1,5 +1,7 @@
 # pi-workbench
 
+[English](README.md) · [简体中文](README.zh-CN.md)
+
 Experimental extensions, persistent local memory, and multi-agent task delegation for [Pi](https://github.com/earendil-works/pi).
 
 pi-workbench explores more structured coding workflows on top of Pi: guide an agent through **explore → edit → verify**, retain useful local execution patterns, and delegate tasks to specialized agents through single, parallel, or chained calls.
@@ -218,6 +220,7 @@ The repository uses an explicit public allowlist. Its ignore rules do not automa
 
 ```text
 README.md
+README.zh-CN.md                    # Simplified Chinese README
 docs/                             # Installation, usage, evidence, provenance
 public/
   extensions/

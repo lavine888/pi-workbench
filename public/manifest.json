@@ -21,6 +21,12 @@
       "transformation": "none"
     },
     {
+      "path": "README.zh-CN.md",
+      "source": "README.md",
+      "provenance": "release-preparation",
+      "transformation": "Simplified Chinese translation; commands and technical boundaries preserved"
+    },
+    {
       "path": "docs/INSTALLATION.md",
       "source": "created-for-this-task",
       "provenance": "release-preparation",
