@@ -6,6 +6,7 @@
 !/README.zh-CN.md
 !/docs/
 /docs/*
+!/docs/BENCHMARK_HANDOFF.md
 !/docs/DEMO.md
 !/docs/INSTALLATION.md
 !/docs/PROJECT_STRUCTURE.md

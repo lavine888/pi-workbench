@@ -18,13 +18,19 @@
       "path": "README.md",
       "source": "created-for-this-task",
       "provenance": "release-preparation",
-      "transformation": "none"
+      "transformation": "Condense navigation, distinguish test evidence, and clarify optional harness limitations"
     },
     {
       "path": "README.zh-CN.md",
       "source": "README.md",
       "provenance": "release-preparation",
-      "transformation": "Simplified Chinese translation; commands and technical boundaries preserved"
+      "transformation": "Synchronized Simplified Chinese README; commands and validation boundaries preserved"
+    },
+    {
+      "path": "docs/BENCHMARK_HANDOFF.md",
+      "source": "created-for-documentation-refinement",
+      "provenance": "release-preparation",
+      "transformation": "External Lab task specification only; no benchmark implementation or results imported"
     },
     {
       "path": "docs/DEMO.md",

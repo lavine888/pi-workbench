@@ -69,3 +69,7 @@ tests/
 ## 维护边界
 
 不移动部署文件，不覆盖既有输出，不修改注册表、进程、全局安装、认证目录或外部项目。pi-reliability-lab 的引用仅出现在本地任务资料中，没有发现核心源码导入、配置包依赖或构建依赖；不合并它的代码、文档或测试成绩。
+
+## 文档整理阶段补充
+
+新增 `docs/BENCHMARK_HANDOFF.md` 为独立 Lab 的指标与日志修复交接任务；本仓库没有随之增加 benchmark runner、guarded-harness.ts 或模型评测成绩。当前公开范围仍以 `public/manifest.json` 为准。

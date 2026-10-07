@@ -56,3 +56,11 @@ node --test tests/subagent.test.mjs
 - 确认原始代码与本轮增量的授权，建立版本化分发方式。
 
 示例阅读清单的四个基线测试见[演示指南](DEMO.md)，与这里的 19 项行为检查分别记录。没有运行其他项目的测试，也没有发布 npm。
+
+## 2026-10-07 文档整理阶段的独立复核
+
+本轮在 Linux、Node.js 24.19.0 上运行同一条 `node --test tests/subagent.test.mjs`，结果为 **19 项通过、0 项失败、0 项跳过**，退出码 0，模型调用数为 0。测试仍使用合成子 CLI；这仅补充该环境下的进程／协议回归证据，不验证完整 Linux Pi 工作流、真实提供商、模型输出或 TUI，也不是对所有 POSIX 终止场景的保证。
+
+同时执行 `node scripts/create-demo.mjs` 和 `node scripts/check-demo.mjs`：显式复制 15 个文件，四个示例 CLI 基线测试及副本完整性检查通过。没有启动真实 Pi 或读取提供商认证。公开 harness 源码未修改，文本验证误判仍是已知限制。
+
+上述结果与先前维护者记录的 Windows / Pi 0.84.2 检查分别列示；本轮不声称复现了那些实际 Pi 检查。独立 Lab 的指标／日志修复需要它自己的源码，见[BENCHMARK_HANDOFF.md](BENCHMARK_HANDOFF.md)。
